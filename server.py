@@ -17,7 +17,7 @@ MSG_ABORT = "Abort"
 MSG_OKAY = "Okay"
 MSG_READY = "Ready"
 MSG_CONTINUE = "Continue"
-MSG_FILE_EXIST = "File Exist\n"
+MSG_FILE_EXIST = "File Exist"
 MSG_REWRITE = "Do you wish to overwrite the file contents? [y]/[n]\n"
 
 
@@ -27,11 +27,23 @@ Helpers
 def str2byte(sentence):
     return sentence.encode()
 
+
 def byte2str(sentence):
     return sentence.decode('utf-8')
 
 
+def file_exist(fname):
+    return os.path.exists(FILE_DIR + fname)
+
+
 def send_file(conn, fname):
+
+    file_dir = os.path.join(FILE_DIR, fname)
+    with open(file_dir, 'rb') as file_to_send:
+        for data in file_to_send:
+            conn.send(data)
+    
+    print('Send successfully!')
     return 0
 
 
@@ -40,22 +52,25 @@ def receive_file(conn, fname):
     with open(file_dir, 'wb') as file_to_receive:
         while True:
             data = conn.recv(BUFFER_SIZE)
-            print(byte2str(data))
+            # print(byte2str(data))
             if not data:
                 break
             file_to_receive.write(data)
+            if len(data) < BUFFER_SIZE:
+                break
     
-    return 0
-
-
-def file_exist(fname):
-    return os.path.exists(FILE_DIR + fname)
+    print('File received!')
+    return 1
 
 
 def get_file(conn, fname):
     if file_exist(fname):
+        send_msg = MSG_FILE_EXIST
+        conn.send(str2byte(send_msg))
+
         send_msg = MSG_READY
         conn.send(str2byte(send_msg))
+
         send_file(conn, fname)
     else:
         send_msg = MSG_CANCEL

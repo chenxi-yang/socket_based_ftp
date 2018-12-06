@@ -13,6 +13,8 @@ MSG_OKAY = 'Okay'
 MSG_FILE_EXIST = "File Exist\n"
 MSG_REWRITE = "Do you wish to overwrite the file contents? [y]/[n]\n"
 MSG_ABORT = "Abort"
+MSG_CANCEL = "Cancel"
+MSG_READY = "Ready"
 
 
 '''
@@ -35,8 +37,24 @@ def send_file(s, fname):
     with open(file_dir, 'rb') as file_to_send:
         for data in file_to_send:
             s.send(data)
+    
     print('Send successfully!')
     return 0
+
+
+def receive_file(s, fname):
+    file_dir = os.path.join(FILE_DIR, fname)
+    with open(file_dir, 'wb') as file_to_receive:
+        while True:
+            data = s.recv(BUFFER_SIZE)
+            if not data:
+                break
+            file_to_receive.write(data)
+            if len(data) < BUFFER_SIZE:
+                break
+    
+    print('File received!')
+    return 1
 
 
 def put_file(s, fname):
@@ -64,6 +82,29 @@ def put_file(s, fname):
                 print('Operation Abort!\n')
 
 
+def get_file(s, fname):
+    data = s.recv(BUFFER_SIZE)
+    if byte2str(data) == MSG_CANCEL:
+        print('File not in the server\'s disk.')
+    else:
+        data = s.recv(BUFFER_SIZE)
+        print(byte2str(data))
+
+        if byte2str(data) == MSG_READY:
+            if file_exist(fname):
+                resp = input(MSG_REWRITE)
+                if resp == 'y':
+                    receive_file(s, fname)
+                else:
+                    print('Don\'t receive file.')
+            else:
+                print('hi')
+                receive_file(s, fname)
+        else:
+            print('Operation Abort!\n')
+
+
+
 if __name__ == "__main__":
     try:
         print('Client is starting')
@@ -88,6 +129,9 @@ if __name__ == "__main__":
                 if s.recv(BUFFER_SIZE) != MSG_SUCCESS:
                     print('Error sending file. Please try again.\n')
                     break
+            elif cmd_name == 'GET':
+                fname = cmd_list[1]
+                get_file(s, fname)
 
             data = s.recv(BUFFER_SIZE)
             repr(data)
