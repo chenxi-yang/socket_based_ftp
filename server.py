@@ -143,7 +143,7 @@ def mkdir(conn, cmd_list):
 PWD
 '''
 def print_working_dir(conn):
-    send_msg = cur_work_dir
+    send_msg = os.path.realpath(cur_work_dir)
     conn.send(str2byte(send_msg))
 
 
@@ -157,7 +157,6 @@ def change_dir(conn, cmd_list):
 
     if os.path.exists(tmp_dir):
         send_msg = MSG_SUCCESS
-        # TODO: before join, handle ../..
         cur_work_dir = os.path.realpath(tmp_dir)
     else:
         send_msg = MSG_NOT_FOUND
