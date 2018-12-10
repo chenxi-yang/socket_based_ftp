@@ -11,18 +11,24 @@ FILE_DIR = './client_file/'
 
 MSG_SUCCESS = 'Success'
 MSG_OKAY = 'Okay'
-MSG_FILE_EXIST = "File Exist\n"
-MSG_REWRITE = "Do you wish to overwrite the file contents? [y]/[n]\n"
+MSG_FILE_EXIST = "File Exists. "
+MSG_REWRITE = "Do you wish to overwrite the file contents? [y]/[n] "
 MSG_ABORT = "Abort"
 MSG_CANCEL = "Cancel"
 MSG_READY = "Ready"
 MSG_NOT_FOUND = "NOT FOUND"
 MSG_CLOSE = "Closing"
-
+MSG_ENTER_FILE = "No file"
 
 '''
 Helpers
 '''
+def int2byte(x):
+    return x.to_bytes(4, byteorder='big')
+
+def byte2int(xbytes):
+    return int.from_bytes(xbytes, 'big')
+
 def str2byte(sentence):
     return sentence.encode()
 
@@ -37,19 +43,22 @@ def file_exist(fname):
 
 def send_file(s, fname):
     file_dir = os.path.join(FILE_DIR, fname)
+
     with open(file_dir, 'rb') as file_to_send:
         for data in file_to_send:
             s.send(data)
     
     print('Send successfully!')
-    return 0
+    return
 
 
 def receive_file(s, fname):
     file_dir = os.path.join(FILE_DIR, fname)
+    print('in')
     with open(file_dir, 'wb') as file_to_receive:
         while True:
             data = s.recv(BUFFER_SIZE)
+            print('Receiving...')
             if not data:
                 break
             file_to_receive.write(data)
@@ -63,8 +72,7 @@ def receive_file(s, fname):
 '''
 PUT
 '''
-def put_file(s, cmd_list):
-    fname = cmd_list[1]
+def put_file(s, fname):
 
     data = s.recv(BUFFER_SIZE)
 
@@ -77,40 +85,43 @@ def put_file(s, cmd_list):
 
         if send_msg == 'y':
             data = s.recv(BUFFER_SIZE)
-            print(byte2str(data))
+            # print(byte2str(data))
             if byte2str(data) == MSG_OKAY:
                 send_file(s, fname)
             else:
                 print('Operation Abort!\n')
-        
+
         else:
             data = s.recv(BUFFER_SIZE)
             if byte2str(data) == MSG_ABORT:
                 print('Unexpected response from server\n')
             else:
                 print('Operation Abort!\n')
-
+    
+    return 
 
 '''
 GET
 '''
 def get_file(s, cmd_list):
-    fname = cmd_list[1]
 
     data = s.recv(BUFFER_SIZE)
-    print(byte2str(data))
 
-    if byte2str(data) == MSG_CANCEL:
+    if byte2str(data) == MSG_ENTER_FILE:
+        print('Please enter a file.')
+    elif byte2str(data) == MSG_CANCEL:
         print('File not in the server\'s disk.')
     else:
+        fname = cmd_list[1]
         if file_exist(fname):
             resp = input(MSG_REWRITE)
+            s.send(str2byte(resp))
             if resp == 'y':
                 receive_file(s, fname)
             else:
                 print('Don\'t receive file.')
         else:
-            # print('hi')
+            s.send(str2byte('y'))
             receive_file(s, fname)
 
 
@@ -179,9 +190,15 @@ if __name__ == "__main__":
 
         s.connect((HOST, PORT))
 
+        print('Connected to %s on port' % HOST, PORT)
+
         while True:
-            cmd = input()
-            s.send(str2byte(cmd))
+            cmd = input('FTP>')
+
+            byte_cmd = str2byte(cmd)
+            len_cmd = len(byte_cmd)
+
+            s.send(int2byte(len_cmd) + byte_cmd)
 
             cmd_list = cmd.split()
             cmd_name = cmd_list[0].upper()
@@ -193,9 +210,6 @@ if __name__ == "__main__":
                     continue
                 print('Transferring file to server.\n')
                 put_file(s, fname)
-                if s.recv(BUFFER_SIZE) != MSG_SUCCESS:
-                    print('Error sending file. Please try again.\n')
-                    break
             elif cmd_name == 'GET':
                 get_file(s, cmd_list)
             elif cmd_name == 'LS':

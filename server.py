@@ -23,6 +23,7 @@ MSG_FILE_EXIST = "File Exist"
 MSG_NOT_FOUND = "NOT FOUND"
 MSG_CLOSE = "Closing"
 MSG_REWRITE = "Do you wish to overwrite the file contents? [y]/[n]\n"
+MSG_ENTER_FILE = "No file"
 
 
 base_work_dir = './server_file/'
@@ -32,6 +33,12 @@ cur_work_dir = ''
 '''
 Helpers
 '''
+def int2byte(x):
+    return x.to_bytes(4, byteorder='big')
+
+def byte2int(xbytes):
+    return int.from_bytes(xbytes, 'big')
+
 def str2byte(sentence):
     return sentence.encode()
 
@@ -47,7 +54,6 @@ def file_exist(fname):
 def send_file(conn, fname):
 
     file_dir = os.path.join(cur_work_dir, fname)
-    print(cur_work_dir)
 
     with open(file_dir, 'rb') as file_to_send:
         for data in file_to_send:
@@ -59,10 +65,11 @@ def send_file(conn, fname):
 
 def receive_file(conn, fname):
     file_dir = os.path.join(cur_work_dir, fname)
+
     with open(file_dir, 'wb') as file_to_receive:
         while True:
             data = conn.recv(BUFFER_SIZE)
-            # print(byte2str(data))
+            print(byte2str(data))
             if not data:
                 break
             file_to_receive.write(data)
@@ -76,33 +83,42 @@ def receive_file(conn, fname):
 '''
 GET
 '''
-def get_file(conn, fname):
-    if file_exist(fname):
-        send_msg = MSG_FILE_EXIST
+def get_file(conn, cmd_list):
+    print(cmd_list)
+    if len(cmd_list) <= 1:
+        send_msg = MSG_ENTER_FILE
         conn.send(str2byte(send_msg))
-
-        # send_msg = MSG_READY
-        # conn.send(str2byte(send_msg))
-
-        send_file(conn, fname)
     else:
-        send_msg = MSG_CANCEL
-        conn.send(str2byte(send_msg))
+        fname = cmd_list[1]
+        if file_exist(fname):
+            send_msg = MSG_FILE_EXIST
+            conn.send(str2byte(send_msg))
+
+            data = conn.recv(BUFFER_SIZE)
+            if byte2str(data) == 'y':
+                send_file(conn, fname)
+            else:
+                pass
+        else:
+            send_msg = MSG_CANCEL
+            conn.send(str2byte(send_msg))
             
 
 '''
 PUT
 '''
-def put_file(conn, fname):
+def put_file(conn, cmd_list):
+
+    fname = cmd_list[1]
     if file_exist(fname):
         send_msg = MSG_FILE_EXIST
         conn.send(str2byte(send_msg))
 
-        buf = conn.recv(BUFFER_SIZE)
-        resp = byte2str(buf)
-        if resp == 'y': # rewrite
+        data = conn.recv(BUFFER_SIZE)
+        if byte2str(data) == 'y': # rewrite
             send_msg = MSG_OKAY
             conn.send(str2byte(send_msg))
+            # print(send_msg)
 
             receive_file(conn, fname)
         else:
@@ -131,7 +147,7 @@ def mkdir(conn, cmd_list):
     dir_name = cmd_list[1]
 
     if not os.path.exists(dir_name):
-        os.makedirs(dir_name)
+        os.makedirs(os.path.join(cur_work_dir, dir_name))
         send_msg = MSG_SUCCESS
     else:
         send_msg = MSG_FILE_EXIST
@@ -178,17 +194,13 @@ def conn_exit(conn):
 def cmd_handler(conn, cmd):
     cmd_list = cmd.split()
     cmd_name = cmd_list[0].upper()
-    print(cmd_name)
+    #print(cmd_name)
     # print(cur_work_dir)
 
     if cmd_name == 'GET':
-        #TODO: no file enter handler
-        fname = cmd_list[1]
-        get_file(conn, fname)
+        get_file(conn, cmd_list)
     elif cmd_name == 'PUT':
-        #TODO: no file enter handler
-        fname = cmd_list[1]
-        put_file(conn, fname)
+        put_file(conn, cmd_list)
     elif cmd_name == 'LS':
         list_file(conn)
     elif cmd_name == 'MKDIR':
@@ -208,21 +220,24 @@ def child_connection(index, conn, addr):
     global cur_work_dir
 
     cur_work_dir = base_work_dir
-    print(cur_work_dir)
+    #print(cur_work_dir)
 
     conn_exit = 0
 
     try:
         print('begin connection %d' % index)
+        print(conn.getsockname())
         conn.settimeout(60)
 
         while True:
-            buf = conn.recv(BUFFER_SIZE)
-            print('BUF: ' + str(buf, 'utf-8'))
-            
-            cmd = byte2str(buf)
-            print('Get value %s from connection %d: ' % (cmd, index))
+            buf = conn.recv(4)
+            #print('BUF: ' + str(buf, 'utf-8'))
+            buf_size = byte2int(buf)
+            print('Get value %s from connection %d: ' % (buf_size, index))
 
+            buf = conn.recv(buf_size)
+            cmd = byte2str(buf)
+            
             if not cmd:
                 break
             else:
